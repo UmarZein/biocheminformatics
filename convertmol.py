@@ -242,7 +242,7 @@ def parse_mol(lines, verbose = False, data_items=False, tuple_realtions=False):
     num_bonds = 0
     num_lists = 0
 
-    mol["name"] = lines[0]
+    mol["id"] = lines[0]
     mol["software"] = lines[1].strip()
     if lines[2]:
         mol["comment"] = lines[2].strip()
@@ -289,25 +289,22 @@ def parse_mol(lines, verbose = False, data_items=False, tuple_realtions=False):
             atom["hydrogen_count"] = h_count_dict[a_line["hhh"]]
 
 
-        mol["?atom%04d"%(l+1)] = atom
+        mol["atom%d"%(l+1)] = atom
 
     ### BOND BLOCK ###
     for l,line in enumerate(lines[atom_dex:bond_dex]):
-        bond = ['bond']
+        bond = dict()
         b_line = parse_bond_line(line)
 
-        bond.append(bond_type_dict[b_line["ttt"]])
+        bond['bond_type']=(bond_type_dict[b_line["ttt"]])
         if bond_type_dict[b_line["ttt"]] == "Single":
-            bond.append(single_bond_stereo_dict[b_line["sss"]])
+            bond['bond_stereo']=(single_bond_stereo_dict[b_line["sss"]])
         elif bond_type_dict[b_line["ttt"]] == "Double":
-            bond.append(double_bond_stereo_dict[b_line["sss"]])
-        bond.append("?atom%04d"%b_line["111"])
-        bond.append("?atom%04d"%b_line["222"])
+            bond['bond_stereo']=(double_bond_stereo_dict[b_line["sss"]])
+        bond['orig']=("atom%d"%b_line["111"])
+        bond['dest']=("atom%d"%b_line["222"])
 
-        if tuple_realtions:
-            mol[tuple(bond)] = True
-        else:
-            mol['('+' '.join(bond)+')'] = True
+        mol['bond%d'%l]=bond
 
     ### PROPERTIES BLOCK ###
 
