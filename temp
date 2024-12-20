@@ -1,0 +1,21 @@
+{
+  "InformationList": {
+    "Information": [
+      {
+        "AID": 331168,
+        "GI": [
+          71658783
+        ],
+        "GeneID": [
+          59272
+        ],
+        "ProteinName": [
+          "Angiotensin-converting enzyme 2"
+        ],
+        "GeneSymbol": [
+          "ACE2"
+        ]
+      }
+    ]
+  }
+}
