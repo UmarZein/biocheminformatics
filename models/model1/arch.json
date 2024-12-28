@@ -1,0 +1,1 @@
+{"name": "model1", "input_size": 32, "hidden_dims": [16, 32, 16], "output_size": 1}
