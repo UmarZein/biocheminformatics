@@ -8,8 +8,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn import Embedding, Linear, ModuleList, Sequential
-
+from .mlp import MLP
+from torch.nn import Embedding, Linear, ModuleList, Sequential, Sigmoid
 from torch_geometric.data import Dataset, download_url, extract_zip
 from torch_geometric.io import fs
 from torch_geometric.nn import MessagePassing, SumAggregation, radius_graph
@@ -17,25 +17,8 @@ from torch_geometric.nn.resolver import aggregation_resolver as aggr_resolver
 from torch_geometric.typing import OptTensor
 
 
-class SchNetPlusPlus(torch.nn.Module):
-    r"""The continuous-filter convolutional neural network SchNet from the
-    `"SchNet: A Continuous-filter Convolutional Neural Network for Modeling
-    Quantum Interactions" <https://arxiv.org/abs/1706.08566>`_ paper that uses
-    the interactions blocks of the form.
-
-    .. math::
-        \mathbf{x}^{\prime}_i = \sum_{j \in \mathcal{N}(i)} \mathbf{x}_j \odot
-        h_{\mathbf{\Theta}} ( \exp(-\gamma(\mathbf{e}_{j,i} - \mathbf{\mu}))),
-
-    here :math:`h_{\mathbf{\Theta}}` denotes an MLP and
-    :math:`\mathbf{e}_{j,i}` denotes the interatomic distances between atoms.
-
-    .. note::
-
-        For an example of using a pretrained SchNet variant, see
-        `examples/qm9_pretrained_schnet.py
-        <https://github.com/pyg-team/pytorch_geometric/blob/master/examples/
-        qm9_pretrained_schnet.py>`_.
+class InnerSchNetPlusPlus(torch.nn.Module):
+    r"""
 
     Args:
         hidden_channels (int, optional): Hidden embedding size.
@@ -79,13 +62,17 @@ class SchNetPlusPlus(torch.nn.Module):
         self.num_gaussians = num_gaussians
         self.cutoff = cutoff
         self.sum_aggr = SumAggregation()
-        self.readout = readout
+        self.readout = aggr_resolver(readout)
         self.scale = None
 
         # Support z == 0 for padding atoms so that their embedding vectors
         # are zeroed and do not receive any gradients.
         self.embedding = Embedding(100, hidden_channels, padding_idx=0)
 
+        #there are currently ~20 bond_types, but we pad it to 30 just in case, for forward-compatibility
+        self.bond_embedding = Embedding(30, num_gaussians)
+        self.bond_type_combiner = MLP(2*num_gaussians, [hidden_channels], num_gaussians, final_activation=Sigmoid)
+        
         self.interaction_graph = RadiusInteractionGraph(cutoff, max_num_neighbors)
 
         self.distance_expansion = GaussianSmearing(0.0, cutoff, num_gaussians)
@@ -114,6 +101,7 @@ class SchNetPlusPlus(torch.nn.Module):
         self.lin2.bias.data.fill_(0)
         
     def forward(self, z: Tensor, pos: Tensor,
+                bond_index: Tensor, bond_type: Tensor,
                 batch: OptTensor = None) -> Tensor:
         r"""Forward pass.
         Args:
@@ -130,7 +118,15 @@ class SchNetPlusPlus(torch.nn.Module):
         h = self.embedding(z)
         edge_index, edge_weight = self.interaction_graph(pos, batch)
         edge_attr = self.distance_expansion(edge_weight)
-
+        # find mutual entries in bond_index and edge_index
+        mutual_idx = (edge_index.unsqueeze(-2)==bond_index.unsqueeze(-1)).all(0).nonzero()
+        radial_ei_idx=mutual_idx[:,1]
+        bonded_ei_idx=mutual_idx[:,0]
+        # replace edge_attr of bonded edges with proper embeddings
+        bond_embeddings = self.bond_embedding(bond_type[bonded_ei_idx])
+        combined_edge_attr = torch.cat([edge_attr[radial_ei_idx],bond_embeddings],-1)
+        edge_attr[radial_ei_idx] = self.bond_type_combiner(combined_edge_attr)
+        
         for interaction in self.interactions:
             h = h + interaction(h, edge_index, edge_weight, edge_attr)
 
@@ -140,12 +136,6 @@ class SchNetPlusPlus(torch.nn.Module):
 
 
         out = self.readout(h, batch, dim=0)
-
-        if self.dipole:
-            out = torch.norm(out, dim=-1, keepdim=True)
-
-        if self.scale is not None:
-            out = self.scale * out
 
         return out
 
@@ -285,3 +275,47 @@ class ShiftedSoftplus(torch.nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return F.softplus(x) - self.shift
+
+
+class SchNetPlusPlus(InnerSchNetPlusPlus):
+    def __init__(self, 
+        hidden_channels: int = 128,
+        num_filters: int = 128,
+        num_interactions: int = 6,
+        num_gaussians: int = 50,
+        cutoff: float = 10.0,
+        max_num_neighbors: int = 32,
+        readout: str = 'add',
+                ):
+        self.__hidden_channels=hidden_channels
+        self.__num_filters=num_filters
+        self.__num_interactions=num_interactions
+        self.__num_gaussians=num_gaussians
+        self.__cutoff=cutoff
+        self.__max_num_neighbors=max_num_neighbors
+        self.__readout=readout
+        super().__init__(
+            hidden_channels=hidden_channels,
+            num_filters=num_filters,
+            num_interactions=num_interactions,
+            num_gaussians=num_gaussians,
+            cutoff=cutoff,
+            max_num_neighbors=max_num_neighbors,
+            readout=readout,
+        )
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+        
+    def get_config(self):
+        return {
+            'hidden_channels':self.__hidden_channels,
+            'num_filters':self.__num_filters,
+            'num_interactions':self.__num_interactions,
+            'num_gaussians':self.__num_gaussians,
+            'cutoff':self.__cutoff,
+            'max_num_neighbors':self.__max_num_neighbors,
+            'readout':self.__readout,
+        }
+    def forward(self, data):
+        return super().forward(data.atom_type,data.pos,data.edge_index,data.edge_type,data.batch).squeeze(-1)        
