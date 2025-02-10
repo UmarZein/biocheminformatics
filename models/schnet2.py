@@ -17,7 +17,7 @@ from torch_geometric.nn.resolver import aggregation_resolver as aggr_resolver
 from torch_geometric.typing import OptTensor
 
 
-class InnerSchNetPlusPlus(torch.nn.Module):
+class Inner(torch.nn.Module):
     r"""
 
     Args:
@@ -93,6 +93,8 @@ class InnerSchNetPlusPlus(torch.nn.Module):
 
     def reset_parameters(self):
         self.embedding.reset_parameters()
+        self.bond_embedding.reset_parameters()
+        self.bond_type_combiner.reset_parameters()
         for interaction in self.interactions:
             interaction.reset_parameters()
         torch.nn.init.xavier_uniform_(self.lin1.weight)
@@ -277,7 +279,7 @@ class ShiftedSoftplus(torch.nn.Module):
         return F.softplus(x) - self.shift
 
 
-class SchNetPlusPlus(InnerSchNetPlusPlus):
+class SchNet2(Inner):
     def __init__(self, 
         hidden_channels: int = 128,
         num_filters: int = 128,

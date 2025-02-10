@@ -25,6 +25,12 @@ class MLP(nn.Module):
                 for x in xs
             ]
         )
+        self.reset_parameters()
+    def reset_parameters(self):
+        for layer in self.layers:
+            if isinstance(layer, nn.Linear):
+                torch.nn.init.xavier_uniform_(layer.weight)
+                layer.bias.data.fill_(0)
     def forward(self, x):
         return self.layers(x)
     def reset_identity(self, scale=1.0):
