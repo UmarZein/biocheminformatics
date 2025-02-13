@@ -1,6 +1,7 @@
 #cache dirs
 cache/
-datasets/processed/
+datasets/**/processed/
+saves/
 
 .vscode/
 

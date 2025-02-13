@@ -37,10 +37,10 @@ class RGINConv(MessagePassing):
         self.aggr=aggr
         self.dropout_rate=dropout_rate
         self.node_mlp = nn.ModuleList([
-            MLP(mlp_dims_node[0], mlp_dims_node[1:-1], mlp_dims_node[-1], dropout_rate=dropout_rate)
+            MLP(mlp_dims_node[0], mlp_dims_node[1:-1], mlp_dims_node[-1], final_activation=None, dropout_rate=dropout_rate)
             for _ in range(mlp_dims_edge[-1])
         ])
-        self.edge_mlp = MLP(mlp_dims_edge[0], mlp_dims_edge[1:-1], mlp_dims_edge[-1], dropout_rate=dropout_rate)
+        self.edge_mlp = MLP(mlp_dims_edge[0], mlp_dims_edge[1:-1], mlp_dims_edge[-1], final_activation=None, dropout_rate=dropout_rate)
         self.reset_parameters()
     def reset_parameters(self):
         for m in self.node_mlp:
