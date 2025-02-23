@@ -129,6 +129,8 @@ class DRGIN5(nn.Module):
                ):
         edge_index, edge_weight = self.interaction_graph(data.pos, data.batch)
         if data.batch is not None:
+            print("edge_weight:",edge_weight)
+            print("data.batch[edge_index[0]]:",data.batch[edge_index[0]])
             edge_attr=self.dist_norm(edge_weight.unsqueeze(-1), data.batch[edge_index[0]])
         else:
             edge_attr=self.dist_norm(edge_weight.unsqueeze(-1), torch.zeros_like(edge_index[0]).long())

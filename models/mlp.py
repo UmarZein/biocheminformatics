@@ -3,7 +3,7 @@ from torch import nn
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, dims, output_dim, activation=nn.Tanh, final_activation=nn.Tanh, dropout_rate=0.1):
+    def __init__(self, input_dim, dims, output_dim, activation=nn.LeakyReLU, final_activation=nn.Identity, dropout_rate=0.1):
         super().__init__()
         self.dims=[input_dim]+dims+[output_dim]
         self.do_rate=dropout_rate
@@ -12,6 +12,7 @@ class MLP(nn.Module):
                 x
                 for xs in [(
                     nn.Linear(self.dims[i],self.dims[i+1]),
+                    nn.BatchNorm1d(self.dims[i+1]),
                     activation(),
                     nn.Dropout(self.do_rate),
                 ) if i+1<len(self.dims)-1 else (
