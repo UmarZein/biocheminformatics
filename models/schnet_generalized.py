@@ -101,7 +101,6 @@ class Inner(torch.nn.Module):
         self.readout = aggr_resolver(readout)
         self.scale = None
         self.train_distance_expansion=train_distance_expansion
-
         # Support z == 0 for padding atoms so that their embedding vectors
         # are zeroed and do not receive any gradients.
         self.embedding = Embedding(100, hidden_channels, padding_idx=0)
@@ -136,22 +135,23 @@ class Inner(torch.nn.Module):
         self.lin2.bias.data.fill_(0)
 
         #pretrain distance expansion
-        opt=torch.optim.AdamW(self.distance_expansion.parameters())
-        x=torch.linspace(0,cutoff,256)
-        z=(x*2-cutoff).view(-1,1)/cutoff
-        y=self.gaussian_smear(x)
-        p=self.distance_expansion(z)
-        loss=((y-p)**2).mean()
-        print('before:', loss.item())
-        it=tqdm(range(10_000))
-        for _ in it:
+        if self.train_distance_expansion:
+            opt=torch.optim.AdamW(self.distance_expansion.parameters())
+            x=torch.linspace(0,cutoff,256)
+            z=(x*2-cutoff).view(-1,1)/cutoff
+            y=self.gaussian_smear(x)
             p=self.distance_expansion(z)
             loss=((y-p)**2).mean()
-            it.set_description(str(int(loss*100000)/100000))
-            self.distance_expansion.zero_grad(set_to_none=True)
-            loss.backward()
-            opt.step()
-        print('after:', loss.item())
+            print('before:', loss.item())
+            it=tqdm(range(10_000))
+            for _ in it:
+                p=self.distance_expansion(z)
+                loss=((y-p)**2).mean()
+                it.set_description(str(int(loss*100000)/100000))
+                self.distance_expansion.zero_grad(set_to_none=True)
+                loss.backward()
+                opt.step()
+            print('after:', loss.item())
     
     def forward(self, z: Tensor, pos: Tensor,
                 batch: OptTensor = None) -> Tensor:

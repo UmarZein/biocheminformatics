@@ -2,6 +2,7 @@
 cache/
 datasets/**/processed/
 saves/
+res/
 
 .vscode/
 
